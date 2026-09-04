@@ -17,6 +17,12 @@ from .serializers import (
     SkillSerializer
 )
 
+from .permissions import (
+    HasCustomerRole,
+    HasWorkerRole,
+    HasEquipmentOwnerRole,
+)
+
 
 class RegisterView(generics.CreateAPIView):
 
@@ -50,7 +56,8 @@ class CustomerProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = CustomerProfileSerializer
 
     permission_classes = [
-        permissions.IsAuthenticated
+        permissions.IsAuthenticated,
+        HasCustomerRole,
     ]
 
     def get_object(self):
@@ -66,7 +73,8 @@ class WorkerProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = WorkerProfileSerializer
 
     permission_classes = [
-        permissions.IsAuthenticated
+        permissions.IsAuthenticated,
+        HasWorkerRole,
     ]
 
     def get_object(self):
@@ -84,7 +92,8 @@ class EquipmentOwnerProfileView(
     serializer_class = EquipmentOwnerProfileSerializer
 
     permission_classes = [
-        permissions.IsAuthenticated
+        permissions.IsAuthenticated,
+        HasEquipmentOwnerRole,
     ]
 
     def get_object(self):
