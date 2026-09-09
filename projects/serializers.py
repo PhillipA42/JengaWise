@@ -36,9 +36,6 @@ class ProjectRequiredSkillSerializer(serializers.ModelSerializer):
 
 
 class ProjectWorkerSerializer(serializers.ModelSerializer):
-    """
-    Displays a worker associated with a project.
-    """
 
     worker_username = serializers.CharField(
         source="worker.username",
@@ -47,11 +44,18 @@ class ProjectWorkerSerializer(serializers.ModelSerializer):
 
     worker_name = serializers.SerializerMethodField()
 
+    project_name = serializers.CharField(
+        source="project.name",
+        read_only=True
+    )
+
     class Meta:
         model = ProjectWorker
 
         fields = (
             "id",
+            "project",
+            "project_name",
             "worker",
             "worker_username",
             "worker_name",
@@ -62,6 +66,9 @@ class ProjectWorkerSerializer(serializers.ModelSerializer):
 
         read_only_fields = (
             "id",
+            "project_name",
+            "worker_username",
+            "worker_name",
             "assigned_at",
             "updated_at",
         )
@@ -72,7 +79,6 @@ class ProjectWorkerSerializer(serializers.ModelSerializer):
             f"{obj.worker.first_name} "
             f"{obj.worker.last_name}"
         ).strip()
-
 
 class ProjectStatusHistorySerializer(serializers.ModelSerializer):
     """

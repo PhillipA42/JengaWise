@@ -1,7 +1,6 @@
 from rest_framework import serializers
 
-from accounts.models import WorkerProfile
-from projects.models import Project
+from projects.models import Project, ProjectWorker
 
 from .models import WorkerReview
 
@@ -66,13 +65,40 @@ class WorkerReviewSerializer(serializers.ModelSerializer):
         project = attrs.get("project")
         worker = attrs.get("worker")
 
-        # Ensure the project belongs to the customer
+        # Ensure the project belongs to the logged-in customer.
         if project.customer != request.user:
 
             raise serializers.ValidationError(
                 {
                     "project":
                     "You can only review workers for your own projects."
+                }
+            )
+
+        # Find the worker's assignment on this project.
+        assignment = ProjectWorker.objects.filter(
+            project=project,
+            worker=worker.user
+        ).first()
+
+        # Worker must have been assigned to the project.
+        if not assignment:
+
+            raise serializers.ValidationError(
+                {
+                    "worker":
+                    "This worker was not assigned to this project."
+                }
+            )
+
+        # Only completed work can be reviewed.
+        if assignment.status != ProjectWorker.WorkerStatus.COMPLETED:
+
+            raise serializers.ValidationError(
+                {
+                    "worker":
+                    "You can only review a worker after they have "
+                    "completed their assignment."
                 }
             )
 
