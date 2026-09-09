@@ -27,6 +27,11 @@ urlpatterns = [
         include("projects.urls")
     ),
 
+    path(
+        "api/reputation/",
+        include("reputation.urls")
+    ),
+
     # OpenAPI Schema
     path(
         "api/schema/",
