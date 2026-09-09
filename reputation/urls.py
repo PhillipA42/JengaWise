@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     WorkerReviewCreateView,
     WorkerReviewListView,
+    WorkerReputationView,
 )
 
 
@@ -20,5 +21,11 @@ urlpatterns = [
         "workers/<int:worker_id>/reviews/",
         WorkerReviewListView.as_view(),
         name="worker-review-list",
+    ),
+
+    path(
+    "workers/<int:worker_id>/summary/",
+    WorkerReputationView.as_view(),
+    name="worker-reputation-summary",
     ),
 ]

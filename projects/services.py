@@ -2,6 +2,8 @@ from accounts.models import WorkerProfile
 
 from .models import Project
 
+from reputation.services import WorkerReputationService
+
 
 class WorkerMatchingService:
     """
@@ -67,11 +69,25 @@ class WorkerMatchingService:
             )
         )
 
+        reputation_score = (
+            self.calculate_reputation_score(
+                worker
+            )
+        )
+
+        completed_jobs_score = (
+            self.calculate_completed_jobs_score(
+                worker
+            )
+        )
+
         total_score = (
             skill_score
             + experience_score
             + location_score
             + availability_score
+            + reputation_score
+            + completed_jobs_score
         )
 
         return {
@@ -87,6 +103,14 @@ class WorkerMatchingService:
             ),
             "availability_score": round(
                 availability_score,
+                2
+            ),
+            "reputation_score": round(
+                reputation_score,
+                2
+            ),
+            "completed_jobs_score": round(
+                completed_jobs_score,
                 2
             ),
         }
@@ -122,7 +146,7 @@ class WorkerMatchingService:
             / len(required_skills)
         )
 
-        return match_percentage * 40
+        return match_percentage * 35
 
     def calculate_experience_score(self, worker):
 
@@ -130,9 +154,9 @@ class WorkerMatchingService:
 
         if years >= 10:
 
-            return 20
+            return 15
 
-        return (years / 10) * 20
+        return (years / 10) * 15
 
     def calculate_location_score(self, worker):
 
@@ -151,7 +175,7 @@ class WorkerMatchingService:
         # Exact location match
         if project_location == worker_location:
 
-            return 20
+            return 15
 
         # Partial location match
         if (
@@ -159,7 +183,7 @@ class WorkerMatchingService:
             or worker_location in project_location
         ):
 
-            return 15
+            return 10
 
         return 0
     def calculate_availability_score(self, worker):
@@ -169,6 +193,38 @@ class WorkerMatchingService:
             == WorkerProfile.AvailabilityStatus.AVAILABLE
         ):
 
-            return 20
+            return 15
 
         return 0
+
+    def calculate_reputation_score(self, worker):
+
+        reputation_service = (
+            WorkerReputationService(worker)
+        )
+
+        reputation = (
+            reputation_service.get_reputation()
+        )
+
+        reputation_percentage = (
+            reputation["reputation_score"]
+        )
+
+        # Convert reputation from 0–100
+        # into a maximum of 10 points.
+        return (
+            reputation_percentage / 100
+        ) * 10
+
+    def calculate_completed_jobs_score(self, worker):
+
+        completed_jobs = worker.completed_jobs
+
+        # Maximum score is reached at 20 jobs.
+        if completed_jobs >= 20:
+            return 10
+
+        return (
+            completed_jobs / 20
+        ) * 10

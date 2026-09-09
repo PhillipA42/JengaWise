@@ -196,6 +196,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class WorkerMatchSerializer(serializers.Serializer):
 
+    # Worker information
     worker_id = serializers.SerializerMethodField()
     username = serializers.SerializerMethodField()
     first_name = serializers.SerializerMethodField()
@@ -205,11 +206,18 @@ class WorkerMatchSerializer(serializers.Serializer):
     location = serializers.SerializerMethodField()
     skills = serializers.SerializerMethodField()
 
+    # Worker statistics
+    completed_jobs = serializers.SerializerMethodField()
+    worker_reputation = serializers.SerializerMethodField()
+
+    # Matching scores
     match_score = serializers.FloatField()
     skill_score = serializers.FloatField()
     experience_score = serializers.FloatField()
     location_score = serializers.FloatField()
     availability_score = serializers.FloatField()
+    reputation_score = serializers.FloatField()
+    completed_jobs_score = serializers.FloatField()
 
     def get_worker_id(self, obj):
         return obj["worker"].user.id
@@ -244,3 +252,21 @@ class WorkerMatchSerializer(serializers.Serializer):
             skill.name
             for skill in obj["worker"].skills.all()
         ]
+
+    def get_completed_jobs(self, obj):
+
+        return obj["worker"].completed_jobs
+
+    def get_worker_reputation(self, obj):
+
+        from reputation.services import (
+            WorkerReputationService
+        )
+
+        reputation_service = WorkerReputationService(
+            obj["worker"]
+        )
+
+        reputation = reputation_service.get_reputation()
+
+        return reputation["reputation_score"]
