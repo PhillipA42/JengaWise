@@ -7,6 +7,7 @@ from .models import (
     ProjectRequiredSkill,
     ProjectWorker,
     ProjectStatusHistory,
+    ProjectMilestone,
 )
 
 
@@ -276,3 +277,78 @@ class WorkerMatchSerializer(serializers.Serializer):
         reputation = reputation_service.get_reputation()
 
         return reputation["reputation_score"]
+
+
+class ProjectMilestoneSerializer(serializers.ModelSerializer):
+
+    project_name = serializers.CharField(
+        source="project.name",
+        read_only=True
+    )
+
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True
+    )
+
+    class Meta:
+        model = ProjectMilestone
+
+        fields = (
+            "id",
+            "project",
+            "project_name",
+            "name",
+            "description",
+            "progress_percentage",
+            "status",
+            "start_date",
+            "expected_completion_date",
+            "actual_completion_date",
+            "notes",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = (
+            "id",
+            "project",
+            "project_name",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, attrs):
+
+        progress = attrs.get(
+            "progress_percentage",
+            self.instance.progress_percentage
+            if self.instance
+            else 0
+        )
+
+        status = attrs.get(
+            "status",
+            self.instance.status
+            if self.instance
+            else ProjectMilestone.MilestoneStatus.NOT_STARTED
+        )
+
+        if progress == 100:
+            status = ProjectMilestone.MilestoneStatus.COMPLETED
+            attrs["status"] = status
+
+        if (
+            progress < 100
+            and status == ProjectMilestone.MilestoneStatus.COMPLETED
+        ):
+            raise serializers.ValidationError(
+                "A milestone can only be marked completed "
+                "when progress is 100%."
+            )
+
+        return attrs

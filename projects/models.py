@@ -3,6 +3,8 @@ from django.db import models
 
 from accounts.models import Skill
 
+from django.core.validators import MaxValueValidator, MinValueValidator
+
 
 class Project(models.Model):
     """
@@ -254,3 +256,83 @@ class ProjectStatusHistory(models.Model):
             f"{self.previous_status} → "
             f"{self.new_status}"
         )
+
+
+class ProjectMilestone(models.Model):
+    """
+    Represents a major stage of work within a construction project.
+    """
+
+    class MilestoneStatus(models.TextChoices):
+        NOT_STARTED = "NOT_STARTED", "Not Started"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
+        COMPLETED = "COMPLETED", "Completed"
+        ON_HOLD = "ON_HOLD", "On Hold"
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="milestones"
+    )
+
+    name = models.CharField(
+        max_length=255
+    )
+
+    description = models.TextField(
+        blank=True
+    )
+
+    progress_percentage = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100),
+        ]
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=MilestoneStatus.choices,
+        default=MilestoneStatus.NOT_STARTED
+    )
+
+    start_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    expected_completion_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    actual_completion_date = models.DateField(
+        null=True,
+        blank=True
+    )
+
+    notes = models.TextField(
+        blank=True
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_project_milestones"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        ordering = ["start_date", "created_at"]
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"

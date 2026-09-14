@@ -2,6 +2,7 @@ from rest_framework import generics, permissions
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from .completion_services import ProjectCompletionService
 
 from accounts.permissions import HasCustomerRole
 
@@ -14,6 +15,8 @@ from .serializers import (
     ProjectSerializer,
     ProjectStatusHistorySerializer,
     WorkerMatchSerializer,
+    ProjectMilestoneSerializer,
+    ProjectMilestone,
 )
 
 from .services import WorkerMatchingService
@@ -261,3 +264,81 @@ class WorkerAssignmentStatusView(
             serializer.data
         )
 
+
+class CompleteProjectView(generics.GenericAPIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProjectSerializer
+
+    def post(self, request, project_id):
+
+        project = get_object_or_404(
+            Project,
+            id=project_id
+        )
+
+        notes = request.data.get(
+            "notes",
+            ""
+        )
+
+        project = ProjectCompletionService.complete_project(
+            project=project,
+            customer=request.user,
+            notes=notes
+        )
+
+        serializer = self.get_serializer(project)
+
+        return Response(
+            serializer.data,
+            status=200
+        )
+
+class ProjectMilestoneListCreateView(generics.ListCreateAPIView):
+
+    serializer_class = ProjectMilestoneSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        is_customer = project.customer == self.request.user
+
+        is_assigned_worker = ProjectWorker.objects.filter(
+            project=project,
+            worker=self.request.user,
+            status__in=[
+                ProjectWorker.WorkerStatus.ACCEPTED,
+                ProjectWorker.WorkerStatus.ACTIVE,
+                ProjectWorker.WorkerStatus.COMPLETED,
+            ]
+        ).exists()
+
+        if not is_customer and not is_assigned_worker:
+            return ProjectMilestone.objects.none()
+
+        return ProjectMilestone.objects.filter(
+            project=project
+        )
+
+    def perform_create(self, serializer):
+
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        if project.customer != self.request.user:
+            raise permissions.PermissionDenied(
+                "Only the project customer can create milestones."
+            )
+
+        serializer.save(
+            project=project,
+            created_by=self.request.user
+        )

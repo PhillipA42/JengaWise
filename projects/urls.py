@@ -4,9 +4,11 @@ from .views import (
     ProjectDetailView,
     ProjectHistoryView,
     ProjectListCreateView,
+    ProjectMilestoneListCreateView,
     ProjectWorkerMatchesView,
     InviteWorkerView,
     WorkerAssignmentStatusView,
+    CompleteProjectView
 )
 
 
@@ -47,4 +49,18 @@ urlpatterns = [
     WorkerAssignmentStatusView.as_view(),
     name="worker-assignment-status",
     ),
+
+    path(
+    "<int:project_id>/complete/",
+    CompleteProjectView.as_view(),
+    name="complete-project"
+    ),
+
+    path(
+    "<int:project_id>/milestones/",
+
+    ProjectMilestoneListCreateView.as_view(),
+    name="project-milestones"
+),
+
 ]
