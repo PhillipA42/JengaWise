@@ -336,3 +336,26 @@ class ProjectMilestone(models.Model):
 
     def __str__(self):
         return f"{self.project.name} - {self.name}"
+
+class ProjectPassport(models.Model):
+    project = models.OneToOneField(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="passport"
+    )
+    passport_number = models.CharField(
+        max_length=50,
+        unique=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"Project Passport - "
+            f"{self.project.name} "
+            f"({self.passport_number})"
+        )

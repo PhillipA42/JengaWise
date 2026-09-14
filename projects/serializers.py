@@ -8,6 +8,7 @@ from .models import (
     ProjectWorker,
     ProjectStatusHistory,
     ProjectMilestone,
+    ProjectPassport,
 )
 
 
@@ -352,3 +353,57 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+class ProjectPassportSerializer(serializers.ModelSerializer):
+
+    project_name = serializers.CharField(
+        source="project.name",
+        read_only=True
+    )
+
+    project_status = serializers.CharField(
+        source="project.status",
+        read_only=True
+    )
+
+    customer_username = serializers.CharField(
+        source="project.customer.username",
+        read_only=True
+    )
+
+    overall_progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectPassport
+
+        fields = (
+            "id",
+            "project",
+            "project_name",
+            "customer_username",
+            "passport_number",
+            "project_status",
+            "overall_progress",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = (
+            "id",
+            "project",
+            "project_name",
+            "customer_username",
+            "passport_number",
+            "project_status",
+            "overall_progress",
+            "created_at",
+            "updated_at",
+        )
+
+    def get_overall_progress(self, obj):
+
+        from .progress_services import ProjectProgressService
+
+        return ProjectProgressService.calculate_progress(
+            obj.project
+        )

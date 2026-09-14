@@ -9,6 +9,9 @@ from accounts.permissions import HasCustomerRole
 from .models import (
     Project,
     ProjectStatusHistory,
+    ProjectMilestone,
+    ProjectPassport,
+    ProjectWorker,
 )
 
 from .serializers import (
@@ -16,7 +19,8 @@ from .serializers import (
     ProjectStatusHistorySerializer,
     WorkerMatchSerializer,
     ProjectMilestoneSerializer,
-    ProjectMilestone,
+    ProjectPassportSerializer,
+    ProjectWorkerSerializer,
 )
 
 from .services import WorkerMatchingService
@@ -24,8 +28,7 @@ from .services import WorkerMatchingService
 from accounts.models import User
 
 from .hiring_services import ProjectHiringService
-from .models import ProjectWorker
-from .serializers import ProjectWorkerSerializer
+
 class ProjectListCreateView(generics.ListCreateAPIView):
     """
     Allows customers to:
@@ -342,3 +345,103 @@ class ProjectMilestoneListCreateView(generics.ListCreateAPIView):
             project=project,
             created_by=self.request.user
         )
+
+class ProjectMilestoneDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = ProjectMilestoneSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        is_customer = project.customer == self.request.user
+
+        is_assigned_worker = ProjectWorker.objects.filter(
+            project=project,
+            worker=self.request.user,
+            status__in=[
+                ProjectWorker.WorkerStatus.ACCEPTED,
+                ProjectWorker.WorkerStatus.ACTIVE,
+                ProjectWorker.WorkerStatus.COMPLETED,
+            ]
+        ).exists()
+
+        if not is_customer and not is_assigned_worker:
+            return ProjectMilestone.objects.none()
+
+        return ProjectMilestone.objects.filter(
+            project=project
+        )
+
+    def perform_update(self, serializer):
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        if project.customer == self.request.user:
+            serializer.save()
+            return
+
+        is_assigned_worker = ProjectWorker.objects.filter(
+            project=project,
+            worker=self.request.user,
+            status__in=[
+                ProjectWorker.WorkerStatus.ACCEPTED,
+                ProjectWorker.WorkerStatus.ACTIVE,
+            ]
+        ).exists()
+
+        if not is_assigned_worker:
+            raise permissions.PermissionDenied(
+                "Only the project customer or an active assigned worker "
+                "can update project milestones."
+            )
+
+        serializer.save()
+
+class ProjectPassportView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ProjectPassportSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        project = get_object_or_404(
+            Project,
+            id=kwargs["project_id"]
+        )
+
+        is_customer = project.customer == request.user
+
+        is_assigned_worker = ProjectWorker.objects.filter(
+            project=project,
+            worker=request.user,
+            status__in=[
+                ProjectWorker.WorkerStatus.ACCEPTED,
+                ProjectWorker.WorkerStatus.ACTIVE,
+                ProjectWorker.WorkerStatus.COMPLETED,
+            ]
+        ).exists()
+
+        if not is_customer and not is_assigned_worker:
+            return Response(
+                {
+                    "detail": (
+                        "You do not have permission to access "
+                        "this project passport."
+                    )
+                },
+                status=403
+            )
+
+        passport, created = ProjectPassport.objects.get_or_create(
+            project=project,
+            defaults={
+                "passport_number": f"JW-{project.id:06d}"
+            }
+        )
+
+        serializer = self.get_serializer(passport)
+
+        return Response(serializer.data)
