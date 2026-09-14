@@ -279,9 +279,7 @@ class WorkerMatchSerializer(serializers.Serializer):
 
         return reputation["reputation_score"]
 
-
 class ProjectMilestoneSerializer(serializers.ModelSerializer):
-
     project_name = serializers.CharField(
         source="project.name",
         read_only=True
@@ -294,7 +292,6 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProjectMilestone
-
         fields = (
             "id",
             "project",
@@ -302,6 +299,7 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "progress_percentage",
+            "weight",
             "status",
             "start_date",
             "expected_completion_date",
@@ -324,10 +322,16 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-
         progress = attrs.get(
             "progress_percentage",
             self.instance.progress_percentage
+            if self.instance
+            else 0
+        )
+
+        weight = attrs.get(
+            "weight",
+            self.instance.weight
             if self.instance
             else 0
         )
@@ -339,6 +343,14 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
             else ProjectMilestone.MilestoneStatus.NOT_STARTED
         )
 
+        # Progress cannot exceed 100%
+        if progress > 100:
+            raise serializers.ValidationError({
+                "progress_percentage":
+                    "Progress cannot be greater than 100%."
+            })
+
+        # A completed milestone must have 100% progress
         if progress == 100:
             status = ProjectMilestone.MilestoneStatus.COMPLETED
             attrs["status"] = status
@@ -347,13 +359,45 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
             progress < 100
             and status == ProjectMilestone.MilestoneStatus.COMPLETED
         ):
-            raise serializers.ValidationError(
-                "A milestone can only be marked completed "
-                "when progress is 100%."
+            raise serializers.ValidationError({
+                "status":
+                    "A milestone can only be marked completed "
+                    "when progress is 100%."
+            })
+
+        # Check total project milestone weight
+        project = (
+            self.instance.project
+            if self.instance
+            else self.context.get("project")
+        )
+
+        if project:
+            existing_weight = ProjectMilestone.objects.filter(
+                project=project
             )
 
-        return attrs
+            if self.instance:
+                existing_weight = existing_weight.exclude(
+                    id=self.instance.id
+                )
 
+            total_weight = (
+                sum(
+                    milestone.weight
+                    for milestone in existing_weight
+                )
+                + weight
+            )
+
+            if total_weight > 100:
+                raise serializers.ValidationError({
+                    "weight":
+                        "The total weight of all project milestones "
+                        "cannot exceed 100%."
+                })
+
+        return attrs
 class ProjectPassportSerializer(serializers.ModelSerializer):
 
     project_name = serializers.CharField(

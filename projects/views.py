@@ -298,13 +298,13 @@ class CompleteProjectView(generics.GenericAPIView):
             status=200
         )
 
-class ProjectMilestoneListCreateView(generics.ListCreateAPIView):
-
+class ProjectMilestoneListCreateView(
+    generics.ListCreateAPIView
+):
     serializer_class = ProjectMilestoneSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -329,8 +329,19 @@ class ProjectMilestoneListCreateView(generics.ListCreateAPIView):
             project=project
         )
 
-    def perform_create(self, serializer):
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
 
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        context["project"] = project
+
+        return context
+
+    def perform_create(self, serializer):
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -346,7 +357,9 @@ class ProjectMilestoneListCreateView(generics.ListCreateAPIView):
             created_by=self.request.user
         )
 
-class ProjectMilestoneDetailView(generics.RetrieveUpdateAPIView):
+class ProjectMilestoneDetailView(
+    generics.RetrieveUpdateAPIView
+):
     serializer_class = ProjectMilestoneSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -374,6 +387,18 @@ class ProjectMilestoneDetailView(generics.RetrieveUpdateAPIView):
         return ProjectMilestone.objects.filter(
             project=project
         )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        context["project"] = project
+
+        return context
 
     def perform_update(self, serializer):
         project = get_object_or_404(
@@ -396,12 +421,11 @@ class ProjectMilestoneDetailView(generics.RetrieveUpdateAPIView):
 
         if not is_assigned_worker:
             raise permissions.PermissionDenied(
-                "Only the project customer or an active assigned worker "
-                "can update project milestones."
+                "Only the project customer or an active assigned "
+                "worker can update project milestones."
             )
 
         serializer.save()
-
 class ProjectPassportView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ProjectPassportSerializer

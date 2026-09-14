@@ -1,13 +1,10 @@
-from django.db.models import Avg
+from django.db import models
+from django.db.models import Sum
 
 from .models import ProjectMilestone
 
 
 class ProjectProgressService:
-    """
-    Calculates the overall progress of a construction project
-    based on its milestones.
-    """
 
     @staticmethod
     def calculate_progress(project):
@@ -15,12 +12,18 @@ class ProjectProgressService:
         result = ProjectMilestone.objects.filter(
             project=project
         ).aggregate(
-            average_progress=Avg("progress_percentage")
+            weighted_progress=Sum(
+                models.F("progress_percentage")
+                * models.F("weight")
+            )
         )
 
-        average_progress = result["average_progress"]
+        weighted_progress = result["weighted_progress"]
 
-        if average_progress is None:
+        if weighted_progress is None:
             return 0
 
-        return round(float(average_progress), 2)
+        return round(
+            float(weighted_progress) / 100,
+            2
+        )

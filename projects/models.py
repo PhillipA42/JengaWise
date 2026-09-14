@@ -291,6 +291,14 @@ class ProjectMilestone(models.Model):
         ]
     )
 
+    weight = models.PositiveSmallIntegerField(
+    default=0,
+    validators=[
+        MinValueValidator(0),
+        MaxValueValidator(100)
+        ]
+    )
+
     status = models.CharField(
         max_length=20,
         choices=MilestoneStatus.choices,
