@@ -12,6 +12,7 @@ class Role(models.Model):
         CUSTOMER = "CUSTOMER", "Customer"
         WORKER = "WORKER", "Construction Worker"
         EQUIPMENT_OWNER = "EQUIPMENT_OWNER", "Equipment Owner"
+        SUPPLIER = "SUPPLIER", "Construction Supplier"
 
     name = models.CharField(
         max_length=30,
@@ -267,3 +268,87 @@ class EquipmentOwnerProfile(models.Model):
             return self.business_name
 
         return f"{self.user.username} - Equipment Owner"
+
+class SupplierProfile(models.Model):
+    """
+    Business profile for construction material and service suppliers
+    operating on the JengaWise platform.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="supplier_profile"
+    )
+
+    business_name = models.CharField(
+        max_length=255
+    )
+
+    business_registration_number = models.CharField(
+        max_length=100,
+        blank=True
+    )
+
+    phone_number = models.CharField(
+        max_length=20,
+        blank=True
+    )
+
+    email = models.EmailField(
+        blank=True
+    )
+
+    description = models.TextField(
+        blank=True
+    )
+
+    market = models.ForeignKey(
+        "projects.MarketLocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="suppliers"
+    )
+
+    location = models.CharField(
+        max_length=255,
+        blank=True
+    )
+
+    address = models.TextField(
+        blank=True
+    )
+
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True
+    )
+
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True
+    )
+
+    is_verified = models.BooleanField(
+        default=False
+    )
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def __str__(self):
+        return self.business_name

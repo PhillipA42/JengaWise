@@ -1,10 +1,14 @@
 from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+
 from .completion_services import ProjectCompletionService
+from .hiring_services import ProjectHiringService
+from .services import WorkerMatchingService
 
 from accounts.permissions import HasCustomerRole
+from accounts.models import User
 
 from .models import (
     Project,
@@ -13,6 +17,11 @@ from .models import (
     ProjectPassport,
     ProjectWorker,
     ProjectActivity,
+    MarketLocation,
+    ConstructionMaterial,
+    MaterialPriceObservation,
+    LabourRateObservation,
+    CostEstimate,
 )
 
 from .serializers import (
@@ -23,13 +32,18 @@ from .serializers import (
     ProjectPassportSerializer,
     ProjectWorkerSerializer,
     ProjectActivitySerializer,
+    MarketLocationSerializer,
+    SupplierProfileSerializer,
+    ConstructionMaterialSerializer,
+    MaterialPriceObservationSerializer,
+    LabourRateObservationSerializer,
+    CostEstimateSerializer,
 )
 
-from .services import WorkerMatchingService
 
-from accounts.models import User
-
-from .hiring_services import ProjectHiringService
+# ============================================================
+# PROJECT MANAGEMENT
+# ============================================================
 
 class ProjectListCreateView(generics.ListCreateAPIView):
     """
@@ -46,13 +60,11 @@ class ProjectListCreateView(generics.ListCreateAPIView):
     ]
 
     def get_queryset(self):
-
         return Project.objects.filter(
             customer=self.request.user
         ).order_by("-created_at")
 
     def perform_create(self, serializer):
-
         serializer.save(
             customer=self.request.user
         )
@@ -68,7 +80,6 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
     ]
 
     def get_queryset(self):
-
         return Project.objects.filter(
             customer=self.request.user
         )
@@ -82,8 +93,7 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
             Project.ProjectStatus.CANCELLED,
         ]:
             raise PermissionDenied(
-                "Completed or cancelled projects "
-                "cannot be modified."
+                "Completed or cancelled projects cannot be modified."
             )
 
         previous_status = project.status
@@ -96,10 +106,11 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
 
             ProjectStatusHistory.objects.create(
                 project=updated_project,
-                previous_status=previous_status,
+                old_status=previous_status,
                 new_status=new_status,
                 changed_by=self.request.user,
             )
+
 
 class ProjectHistoryView(generics.ListAPIView):
 
@@ -117,7 +128,12 @@ class ProjectHistoryView(generics.ListAPIView):
         return ProjectStatusHistory.objects.filter(
             project__id=project_id,
             project__customer=self.request.user
-        ).order_by("-changed_at")
+        ).order_by("-created_at")
+
+
+# ============================================================
+# WORKER MATCHING
+# ============================================================
 
 class ProjectWorkerMatchesView(generics.GenericAPIView):
 
@@ -131,21 +147,17 @@ class ProjectWorkerMatchesView(generics.GenericAPIView):
     def get(self, request, project_id):
 
         try:
-
             project = Project.objects.get(
                 id=project_id,
                 customer=request.user
             )
 
         except Project.DoesNotExist:
-
             raise PermissionDenied(
                 "You do not have access to this project."
             )
 
-        matching_service = WorkerMatchingService(
-            project
-        )
+        matching_service = WorkerMatchingService(project)
 
         matches = matching_service.get_matches()
 
@@ -154,10 +166,12 @@ class ProjectWorkerMatchesView(generics.GenericAPIView):
             many=True
         )
 
-        return Response(
-            serializer.data
-        )
+        return Response(serializer.data)
 
+
+# ============================================================
+# WORKER HIRING
+# ============================================================
 
 class InviteWorkerView(generics.CreateAPIView):
 
@@ -177,7 +191,6 @@ class InviteWorkerView(generics.CreateAPIView):
         worker_id = request.data.get("worker")
 
         if not worker_id:
-
             return Response(
                 {
                     "detail": "worker is required."
@@ -190,22 +203,19 @@ class InviteWorkerView(generics.CreateAPIView):
             id=worker_id
         )
 
-        assignment = (
-            ProjectHiringService.invite_worker(
-                project=project,
-                worker=worker,
-                customer=request.user
-            )
+        assignment = ProjectHiringService.invite_worker(
+            project=project,
+            worker=worker,
+            customer=request.user
         )
 
-        serializer = self.get_serializer(
-            assignment
-        )
+        serializer = self.get_serializer(assignment)
 
         return Response(
             serializer.data,
             status=201
         )
+
 
 class WorkerAssignmentStatusView(
     generics.GenericAPIView
@@ -224,12 +234,9 @@ class WorkerAssignmentStatusView(
             id=assignment_id
         )
 
-        new_status = request.data.get(
-            "status"
-        )
+        new_status = request.data.get("status")
 
         if not new_status:
-
             return Response(
                 {
                     "detail": "status is required."
@@ -239,13 +246,10 @@ class WorkerAssignmentStatusView(
 
         valid_statuses = [
             choice[0]
-            for choice in (
-                ProjectWorker.WorkerStatus.choices
-            )
+            for choice in ProjectWorker.WorkerStatus.choices
         ]
 
         if new_status not in valid_statuses:
-
             return Response(
                 {
                     "detail": "Invalid worker status."
@@ -253,26 +257,27 @@ class WorkerAssignmentStatusView(
                 status=400
             )
 
-        assignment = (
-            ProjectHiringService.update_worker_status(
-                assignment=assignment,
-                new_status=new_status,
-                user=request.user
-            )
+        assignment = ProjectHiringService.update_worker_status(
+            assignment=assignment,
+            new_status=new_status,
+            user=request.user
         )
 
-        serializer = self.get_serializer(
-            assignment
-        )
+        serializer = self.get_serializer(assignment)
 
-        return Response(
-            serializer.data
-        )
+        return Response(serializer.data)
 
+
+# ============================================================
+# PROJECT COMPLETION
+# ============================================================
 
 class CompleteProjectView(generics.GenericAPIView):
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
     serializer_class = ProjectSerializer
 
     def post(self, request, project_id):
@@ -300,13 +305,23 @@ class CompleteProjectView(generics.GenericAPIView):
             status=200
         )
 
+
+# ============================================================
+# PROJECT MILESTONES
+# ============================================================
+
 class ProjectMilestoneListCreateView(
     generics.ListCreateAPIView
 ):
+
     serializer_class = ProjectMilestoneSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
 
     def get_queryset(self):
+
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -332,6 +347,7 @@ class ProjectMilestoneListCreateView(
         )
 
     def get_serializer_context(self):
+
         context = super().get_serializer_context()
 
         project = get_object_or_404(
@@ -344,6 +360,7 @@ class ProjectMilestoneListCreateView(
         return context
 
     def perform_create(self, serializer):
+
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -359,13 +376,19 @@ class ProjectMilestoneListCreateView(
             created_by=self.request.user
         )
 
+
 class ProjectMilestoneDetailView(
     generics.RetrieveUpdateAPIView
 ):
+
     serializer_class = ProjectMilestoneSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
 
     def get_queryset(self):
+
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -391,6 +414,7 @@ class ProjectMilestoneDetailView(
         )
 
     def get_serializer_context(self):
+
         context = super().get_serializer_context()
 
         project = get_object_or_404(
@@ -403,6 +427,7 @@ class ProjectMilestoneDetailView(
         return context
 
     def perform_update(self, serializer):
+
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -428,11 +453,22 @@ class ProjectMilestoneDetailView(
             )
 
         serializer.save()
+
+
+# ============================================================
+# PROJECT PASSPORT
+# ============================================================
+
 class ProjectPassportView(generics.RetrieveAPIView):
-    permission_classes = [permissions.IsAuthenticated]
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
     serializer_class = ProjectPassportSerializer
 
     def retrieve(self, request, *args, **kwargs):
+
         project = get_object_or_404(
             Project,
             id=kwargs["project_id"]
@@ -473,13 +509,22 @@ class ProjectPassportView(generics.RetrieveAPIView):
         return Response(serializer.data)
 
 
+# ============================================================
+# PROJECT ACTIVITIES
+# ============================================================
+
 class ProjectActivityListCreateView(
     generics.ListCreateAPIView
 ):
+
     serializer_class = ProjectActivitySerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
 
     def get_queryset(self):
+
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -505,6 +550,7 @@ class ProjectActivityListCreateView(
         )
 
     def get_serializer_context(self):
+
         context = super().get_serializer_context()
 
         project = get_object_or_404(
@@ -517,6 +563,7 @@ class ProjectActivityListCreateView(
         return context
 
     def perform_create(self, serializer):
+
         project = get_object_or_404(
             Project,
             id=self.kwargs["project_id"]
@@ -542,4 +589,348 @@ class ProjectActivityListCreateView(
         serializer.save(
             project=project,
             created_by=self.request.user
+        )
+
+
+# ============================================================
+# MARKET LOCATIONS
+# ============================================================
+
+class MarketLocationListCreateView(
+    generics.ListCreateAPIView
+):
+
+    serializer_class = MarketLocationSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_queryset(self):
+        return MarketLocation.objects.filter(
+            is_active=True
+        ).order_by(
+            "county",
+            "town",
+            "name"
+        )
+
+
+class MarketLocationDetailView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = MarketLocationSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    queryset = MarketLocation.objects.all()
+
+
+# ============================================================
+# SUPPLIER PROFILE
+# ============================================================
+
+class SupplierProfileCreateView(
+    generics.CreateAPIView
+):
+
+    serializer_class = SupplierProfileSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def perform_create(self, serializer):
+
+        if SupplierProfile.objects.filter(
+            user=self.request.user
+        ).exists():
+
+            raise ValidationError(
+                "You already have a supplier profile."
+            )
+
+        serializer.save(
+            user=self.request.user
+        )
+
+
+class SupplierProfileView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = SupplierProfileSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_object(self):
+
+        return get_object_or_404(
+            SupplierProfile,
+            user=self.request.user
+        )
+
+
+# ============================================================
+# CONSTRUCTION MATERIALS
+# ============================================================
+
+class ConstructionMaterialListCreateView(
+    generics.ListCreateAPIView
+):
+
+    serializer_class = ConstructionMaterialSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_queryset(self):
+
+        queryset = ConstructionMaterial.objects.filter(
+            is_active=True
+        ).order_by("category", "name")
+
+        category = self.request.query_params.get(
+            "category"
+        )
+
+        if category:
+            queryset = queryset.filter(
+                category__iexact=category
+            )
+
+        return queryset
+
+
+class ConstructionMaterialDetailView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = ConstructionMaterialSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    queryset = ConstructionMaterial.objects.all()
+
+
+# ============================================================
+# MATERIAL PRICE OBSERVATIONS
+# ============================================================
+
+class MaterialPriceObservationListCreateView(
+    generics.ListCreateAPIView
+):
+
+    serializer_class = MaterialPriceObservationSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_queryset(self):
+
+        queryset = MaterialPriceObservation.objects.select_related(
+            "material",
+            "supplier",
+            "market"
+        ).order_by(
+            "-observed_on",
+            "-created_at"
+        )
+
+        material_id = self.request.query_params.get(
+            "material"
+        )
+
+        market_id = self.request.query_params.get(
+            "market"
+        )
+
+        if material_id:
+            queryset = queryset.filter(
+                material_id=material_id
+            )
+
+        if market_id:
+            queryset = queryset.filter(
+                market_id=market_id
+            )
+
+        return queryset
+
+    def perform_create(self, serializer):
+
+        supplier = get_object_or_404(
+            SupplierProfile,
+            user=self.request.user
+        )
+
+        market = supplier.market
+
+        serializer.save(
+            supplier=supplier,
+            submitted_by=self.request.user,
+            source="SUPPLIER",
+            market=market
+        )
+
+
+class MaterialPriceObservationDetailView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = MaterialPriceObservationSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_queryset(self):
+
+        return MaterialPriceObservation.objects.filter(
+            submitted_by=self.request.user
+        )
+
+
+# ============================================================
+# LABOUR RATE OBSERVATIONS
+# ============================================================
+
+class LabourRateObservationListCreateView(
+    generics.ListCreateAPIView
+):
+
+    serializer_class = LabourRateObservationSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_queryset(self):
+
+        queryset = LabourRateObservation.objects.select_related(
+            "skill",
+            "supplier",
+            "market"
+        ).order_by(
+            "-observed_on",
+            "-created_at"
+        )
+
+        skill_id = self.request.query_params.get(
+            "skill"
+        )
+
+        market_id = self.request.query_params.get(
+            "market"
+        )
+
+        if skill_id:
+            queryset = queryset.filter(
+                skill_id=skill_id
+            )
+
+        if market_id:
+            queryset = queryset.filter(
+                market_id=market_id
+            )
+
+        return queryset
+
+    def perform_create(self, serializer):
+
+        supplier = get_object_or_404(
+            SupplierProfile,
+            user=self.request.user
+        )
+
+        market = supplier.market
+
+        serializer.save(
+            supplier=supplier,
+            submitted_by=self.request.user,
+            source="SUPPLIER",
+            market=market
+        )
+
+
+class LabourRateObservationDetailView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = LabourRateObservationSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_queryset(self):
+
+        return LabourRateObservation.objects.filter(
+            submitted_by=self.request.user
+        )
+
+
+# ============================================================
+# COST ESTIMATES
+# ============================================================
+
+class CostEstimateListCreateView(
+    generics.ListCreateAPIView
+):
+
+    serializer_class = CostEstimateSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasCustomerRole,
+    ]
+
+    def get_queryset(self):
+
+        return CostEstimate.objects.filter(
+            project__customer=self.request.user
+        ).order_by(
+            "-created_at"
+        )
+
+    def perform_create(self, serializer):
+
+        project = serializer.validated_data.get(
+            "project"
+        )
+
+        if project.customer != self.request.user:
+            raise PermissionDenied(
+                "You can only create estimates for your own projects."
+            )
+
+        serializer.save(
+            created_by=self.request.user
+        )
+
+
+class CostEstimateDetailView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = CostEstimateSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated,
+        HasCustomerRole,
+    ]
+
+    def get_queryset(self):
+
+        return CostEstimate.objects.filter(
+            project__customer=self.request.user
         )

@@ -5,8 +5,9 @@ from .models import (
     CustomerProfile,
     EquipmentOwnerProfile,
     WorkerProfile,
+    SupplierProfile,
     Skill,
-) 
+)
 
 from .serializers import (
     CurrentUserSerializer,
@@ -14,7 +15,8 @@ from .serializers import (
     CustomerProfileSerializer,
     WorkerProfileSerializer,
     EquipmentOwnerProfileSerializer,
-    SkillSerializer
+    SupplierProfileSerializer,
+    SkillSerializer,
 )
 
 from .permissions import (
@@ -51,6 +53,7 @@ class CurrentUserView(generics.GenericAPIView):
             serializer.data
         )
 
+
 class CustomerProfileView(generics.RetrieveUpdateAPIView):
 
     serializer_class = CustomerProfileSerializer
@@ -68,6 +71,7 @@ class CustomerProfileView(generics.RetrieveUpdateAPIView):
 
         return profile
 
+
 class WorkerProfileView(generics.RetrieveUpdateAPIView):
 
     serializer_class = WorkerProfileSerializer
@@ -84,6 +88,7 @@ class WorkerProfileView(generics.RetrieveUpdateAPIView):
         )
 
         return profile
+
 
 class EquipmentOwnerProfileView(
     generics.RetrieveUpdateAPIView
@@ -106,6 +111,52 @@ class EquipmentOwnerProfileView(
 
         return profile
 
+
+class SupplierProfileCreateView(generics.CreateAPIView):
+
+    serializer_class = SupplierProfileSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def perform_create(self, serializer):
+
+        if SupplierProfile.objects.filter(
+            user=self.request.user
+        ).exists():
+
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError(
+                "You already have a supplier profile."
+            )
+
+        serializer.save(
+            user=self.request.user
+        )
+
+
+class SupplierProfileView(
+    generics.RetrieveUpdateAPIView
+):
+
+    serializer_class = SupplierProfileSerializer
+
+    permission_classes = [
+        permissions.IsAuthenticated
+    ]
+
+    def get_object(self):
+
+        from django.shortcuts import get_object_or_404
+
+        return get_object_or_404(
+            SupplierProfile,
+            user=self.request.user
+        )
+
+
 class SkillListView(generics.ListAPIView):
 
     queryset = Skill.objects.all().order_by(
@@ -117,6 +168,7 @@ class SkillListView(generics.ListAPIView):
     permission_classes = [
         permissions.IsAuthenticated
     ]
+
 
 class MyProfilesView(generics.GenericAPIView):
 
@@ -133,6 +185,7 @@ class MyProfilesView(generics.GenericAPIView):
             "customer_profile": None,
             "worker_profile": None,
             "equipment_owner_profile": None,
+            "supplier_profile": None,
         }
 
         if hasattr(user, "customer_profile"):
@@ -156,6 +209,14 @@ class MyProfilesView(generics.GenericAPIView):
             data["equipment_owner_profile"] = (
                 EquipmentOwnerProfileSerializer(
                     user.equipment_owner_profile
+                ).data
+            )
+
+        if hasattr(user, "supplier_profile"):
+
+            data["supplier_profile"] = (
+                SupplierProfileSerializer(
+                    user.supplier_profile
                 ).data
             )
 

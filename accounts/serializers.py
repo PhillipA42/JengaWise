@@ -7,6 +7,7 @@ from .models import (
     CustomerProfile,
     WorkerProfile,
     EquipmentOwnerProfile,
+    SupplierProfile,
 )
 
 
@@ -111,21 +112,36 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             user.roles.add(role)
 
             if role_name == Role.RoleType.CUSTOMER:
+
                 CustomerProfile.objects.get_or_create(
                     user=user
                 )
 
             elif role_name == Role.RoleType.WORKER:
+
                 WorkerProfile.objects.get_or_create(
                     user=user
                 )
 
             elif role_name == Role.RoleType.EQUIPMENT_OWNER:
+
                 EquipmentOwnerProfile.objects.get_or_create(
                     user=user
                 )
 
+            elif role_name == Role.RoleType.SUPPLIER:
+
+                SupplierProfile.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        "business_name": (
+                            f"{user.first_name} {user.last_name}"
+                        ).strip() or user.username
+                    }
+                )
+
         return user
+
 
 class CurrentUserSerializer(serializers.ModelSerializer):
 
@@ -156,6 +172,7 @@ class CurrentUserSerializer(serializers.ModelSerializer):
             for role in obj.roles.all()
         ]
 
+
 class SkillSerializer(serializers.ModelSerializer):
     """
     Serializer for construction and professional skills.
@@ -163,6 +180,7 @@ class SkillSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Skill
+
         fields = (
             "id",
             "name",
@@ -281,6 +299,46 @@ class EquipmentOwnerProfileSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "user",
+            "created_at",
+            "updated_at",
+        )
+
+
+class SupplierProfileSerializer(serializers.ModelSerializer):
+    """
+    Serializer for construction supplier profiles.
+    """
+
+    user = CurrentUserSerializer(
+        read_only=True
+    )
+
+    class Meta:
+        model = SupplierProfile
+
+        fields = (
+            "id",
+            "user",
+            "business_name",
+            "business_registration_number",
+            "phone_number",
+            "email",
+            "description",
+            "market",
+            "location",
+            "address",
+            "latitude",
+            "longitude",
+            "is_verified",
+            "is_active",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = (
+            "id",
+            "user",
+            "is_verified",
             "created_at",
             "updated_at",
         )

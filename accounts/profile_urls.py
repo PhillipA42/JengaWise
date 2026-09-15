@@ -5,6 +5,7 @@ from .views import (
     CustomerProfileView,
     WorkerProfileView,
     EquipmentOwnerProfileView,
+    SupplierProfileView,
     SkillListView,
 )
 
@@ -33,6 +34,12 @@ urlpatterns = [
         "equipment-owner/",
         EquipmentOwnerProfileView.as_view(),
         name="equipment-owner-profile",
+    ),
+
+    path(
+        "supplier/",
+        SupplierProfileView.as_view(),
+        name="supplier-profile",
     ),
 
     path(
