@@ -1,6 +1,9 @@
+from attr import attrs
+from django.utils import timezone
 from rest_framework import serializers
 
 from accounts.models import Skill
+
 
 from .models import (
     Project,
@@ -9,6 +12,7 @@ from .models import (
     ProjectStatusHistory,
     ProjectMilestone,
     ProjectPassport,
+    ProjectActivity,
 )
 
 
@@ -320,7 +324,6 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-
     def validate(self, attrs):
         progress = attrs.get(
             "progress_percentage",
@@ -336,28 +339,37 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
             else 0
         )
 
-        status = attrs.get(
-            "status",
-            self.instance.status
-            if self.instance
-            else ProjectMilestone.MilestoneStatus.NOT_STARTED
-        )
-
-        # Progress cannot exceed 100%
-        if progress > 100:
-            raise serializers.ValidationError({
-                "progress_percentage":
-                    "Progress cannot be greater than 100%."
-            })
-
-        # A completed milestone must have 100% progress
+    # Automatically determine status from progress
         if progress == 100:
-            status = ProjectMilestone.MilestoneStatus.COMPLETED
-            attrs["status"] = status
+            attrs["status"] = (
+                ProjectMilestone.MilestoneStatus.COMPLETED
+            )
 
-        if (
-            progress < 100
-            and status == ProjectMilestone.MilestoneStatus.COMPLETED
+            # Automatically record completion date
+            if (
+                not self.instance
+                or not self.instance.actual_completion_date
+            ):
+                attrs["actual_completion_date"] = (
+                    timezone.localdate()
+                )
+
+        else:
+            # If progress is below 100%, the milestone
+            # cannot remain COMPLETED.
+            current_status = (
+                self.instance.status
+                if self.instance
+                else ProjectMilestone.MilestoneStatus.NOT_STARTED
+            )
+
+            requested_status = attrs.get(
+                "status",
+                current_status
+            )
+
+        if requested_status == (
+            ProjectMilestone.MilestoneStatus.COMPLETED
         ):
             raise serializers.ValidationError({
                 "status":
@@ -365,7 +377,22 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
                     "when progress is 100%."
             })
 
-        # Check total project milestone weight
+        # If an existing completed milestone is moved
+        # below 100%, automatically make it IN_PROGRESS.
+        if (
+            self.instance
+            and self.instance.status
+            == ProjectMilestone.MilestoneStatus.COMPLETED
+        ):
+            attrs["status"] = (
+                ProjectMilestone.MilestoneStatus.IN_PROGRESS
+            )
+
+        # Remove completion date because the milestone
+        # is no longer complete.
+        attrs["actual_completion_date"] = None
+
+    # Validate total milestone weight
         project = (
             self.instance.project
             if self.instance
@@ -373,31 +400,33 @@ class ProjectMilestoneSerializer(serializers.ModelSerializer):
         )
 
         if project:
-            existing_weight = ProjectMilestone.objects.filter(
+            existing_milestones = ProjectMilestone.objects.filter(
                 project=project
             )
 
             if self.instance:
-                existing_weight = existing_weight.exclude(
-                    id=self.instance.id
+                existing_milestones = (
+                    existing_milestones.exclude(
+                        id=self.instance.id
+                    )
                 )
 
-            total_weight = (
-                sum(
-                    milestone.weight
-                    for milestone in existing_weight
-                )
-                + weight
-            )
+        existing_weight = sum(
+            milestone.weight
+            for milestone in existing_milestones
+        )
 
-            if total_weight > 100:
-                raise serializers.ValidationError({
-                    "weight":
-                        "The total weight of all project milestones "
-                        "cannot exceed 100%."
-                })
+        total_weight = existing_weight + weight
+
+        if total_weight > 100:
+            raise serializers.ValidationError({
+                "weight":
+                    "The total weight of all project milestones "
+                    "cannot exceed 100%."
+            })
 
         return attrs
+
 class ProjectPassportSerializer(serializers.ModelSerializer):
 
     project_name = serializers.CharField(
@@ -451,3 +480,71 @@ class ProjectPassportSerializer(serializers.ModelSerializer):
         return ProjectProgressService.calculate_progress(
             obj.project
         )
+
+class ProjectActivitySerializer(serializers.ModelSerializer):
+    project_name = serializers.CharField(
+        source="project.name",
+        read_only=True
+    )
+
+    milestone_name = serializers.CharField(
+        source="milestone.name",
+        read_only=True
+    )
+
+    created_by_username = serializers.CharField(
+        source="created_by.username",
+        read_only=True
+    )
+
+    class Meta:
+        model = ProjectActivity
+        fields = (
+            "id",
+            "project",
+            "project_name",
+            "milestone",
+            "milestone_name",
+            "activity_type",
+            "title",
+            "description",
+            "progress_percentage",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+        )
+
+        read_only_fields = (
+            "id",
+            "project",
+            "project_name",
+            "milestone_name",
+            "created_by",
+            "created_by_username",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, attrs):
+        milestone = attrs.get("milestone")
+
+        if milestone:
+            project = self.context.get("project")
+
+            if milestone.project != project:
+                raise serializers.ValidationError({
+                    "milestone":
+                        "The selected milestone does not belong "
+                        "to this project."
+                })
+
+        progress = attrs.get("progress_percentage")
+
+        if progress is not None and not 0 <= progress <= 100:
+            raise serializers.ValidationError({
+                "progress_percentage":
+                    "Progress must be between 0 and 100."
+            })
+
+        return attrs

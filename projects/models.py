@@ -367,3 +367,72 @@ class ProjectPassport(models.Model):
             f"{self.project.name} "
             f"({self.passport_number})"
         )
+
+class ProjectActivity(models.Model):
+    class ActivityType(models.TextChoices):
+        PROGRESS_UPDATE = "PROGRESS_UPDATE", "Progress Update"
+        MILESTONE_UPDATE = "MILESTONE_UPDATE", "Milestone Update"
+        MATERIAL_DELIVERY = "MATERIAL_DELIVERY", "Material Delivery"
+        WORK_STARTED = "WORK_STARTED", "Work Started"
+        WORK_COMPLETED = "WORK_COMPLETED", "Work Completed"
+        ISSUE_REPORTED = "ISSUE_REPORTED", "Issue Reported"
+        GENERAL_UPDATE = "GENERAL_UPDATE", "General Update"
+
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="activities"
+    )
+
+    milestone = models.ForeignKey(
+        ProjectMilestone,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="activities"
+    )
+
+    activity_type = models.CharField(
+        max_length=30,
+        choices=ActivityType.choices,
+        default=ActivityType.GENERAL_UPDATE
+    )
+
+    title = models.CharField(
+        max_length=255
+    )
+
+    description = models.TextField()
+
+    progress_percentage = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[
+            MinValueValidator(0),
+            MaxValueValidator(100)
+        ]
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="project_activities"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return (
+            f"{self.project.name} - "
+            f"{self.title}"
+        )

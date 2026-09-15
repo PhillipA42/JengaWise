@@ -12,6 +12,7 @@ from .models import (
     ProjectMilestone,
     ProjectPassport,
     ProjectWorker,
+    ProjectActivity,
 )
 
 from .serializers import (
@@ -21,6 +22,7 @@ from .serializers import (
     ProjectMilestoneSerializer,
     ProjectPassportSerializer,
     ProjectWorkerSerializer,
+    ProjectActivitySerializer,
 )
 
 from .services import WorkerMatchingService
@@ -469,3 +471,75 @@ class ProjectPassportView(generics.RetrieveAPIView):
         serializer = self.get_serializer(passport)
 
         return Response(serializer.data)
+
+
+class ProjectActivityListCreateView(
+    generics.ListCreateAPIView
+):
+    serializer_class = ProjectActivitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        is_customer = project.customer == self.request.user
+
+        is_assigned_worker = ProjectWorker.objects.filter(
+            project=project,
+            worker=self.request.user,
+            status__in=[
+                ProjectWorker.WorkerStatus.ACCEPTED,
+                ProjectWorker.WorkerStatus.ACTIVE,
+                ProjectWorker.WorkerStatus.COMPLETED,
+            ]
+        ).exists()
+
+        if not is_customer and not is_assigned_worker:
+            return ProjectActivity.objects.none()
+
+        return ProjectActivity.objects.filter(
+            project=project
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        context["project"] = project
+
+        return context
+
+    def perform_create(self, serializer):
+        project = get_object_or_404(
+            Project,
+            id=self.kwargs["project_id"]
+        )
+
+        is_customer = project.customer == self.request.user
+
+        is_assigned_worker = ProjectWorker.objects.filter(
+            project=project,
+            worker=self.request.user,
+            status__in=[
+                ProjectWorker.WorkerStatus.ACCEPTED,
+                ProjectWorker.WorkerStatus.ACTIVE,
+            ]
+        ).exists()
+
+        if not is_customer and not is_assigned_worker:
+            raise permissions.PermissionDenied(
+                "Only the project customer or an assigned worker "
+                "can create project activities."
+            )
+
+        serializer.save(
+            project=project,
+            created_by=self.request.user
+        )
