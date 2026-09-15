@@ -350,7 +350,7 @@ class ProjectMilestoneListCreateView(
         )
 
         if project.customer != self.request.user:
-            raise permissions.PermissionDenied(
+            raise PermissionDenied(
                 "Only the project customer can create milestones."
             )
 
@@ -422,7 +422,7 @@ class ProjectMilestoneDetailView(
         ).exists()
 
         if not is_assigned_worker:
-            raise permissions.PermissionDenied(
+            raise PermissionDenied(
                 "Only the project customer or an active assigned "
                 "worker can update project milestones."
             )
@@ -534,7 +534,7 @@ class ProjectActivityListCreateView(
         ).exists()
 
         if not is_customer and not is_assigned_worker:
-            raise permissions.PermissionDenied(
+            raise PermissionDenied(
                 "Only the project customer or an assigned worker "
                 "can create project activities."
             )
