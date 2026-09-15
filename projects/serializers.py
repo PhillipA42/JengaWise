@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from accounts.models import Skill, SupplierProfile
+from accounts.models import Skill
 
 from .models import (
     Project,
@@ -595,53 +595,6 @@ class MarketLocationSerializer(serializers.ModelSerializer):
 
         read_only_fields = (
             "id",
-            "created_at",
-            "updated_at",
-        )
-
-
-# ============================================================
-# SUPPLIER PROFILE
-# ============================================================
-
-class SupplierProfileSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(
-        read_only=True
-    )
-
-    market_name = serializers.CharField(
-        source="market.name",
-        read_only=True,
-    )
-
-    class Meta:
-        model = SupplierProfile
-
-        fields = (
-            "id",
-            "user",
-            "business_name",
-            "business_registration_number",
-            "phone_number",
-            "email",
-            "description",
-            "market",
-            "market_name",
-            "location",
-            "address",
-            "latitude",
-            "longitude",
-            "is_verified",
-            "is_active",
-            "created_at",
-            "updated_at",
-        )
-
-        read_only_fields = (
-            "id",
-            "user",
-            "market_name",
-            "is_verified",
             "created_at",
             "updated_at",
         )

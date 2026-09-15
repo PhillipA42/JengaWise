@@ -1,5 +1,5 @@
 from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
@@ -8,7 +8,7 @@ from .hiring_services import ProjectHiringService
 from .services import WorkerMatchingService
 
 from accounts.permissions import HasCustomerRole
-from accounts.models import User
+from accounts.models import User, SupplierProfile
 
 from .models import (
     Project,
@@ -33,7 +33,6 @@ from .serializers import (
     ProjectWorkerSerializer,
     ProjectActivitySerializer,
     MarketLocationSerializer,
-    SupplierProfileSerializer,
     ConstructionMaterialSerializer,
     MaterialPriceObservationSerializer,
     LabourRateObservationSerializer,
@@ -627,53 +626,6 @@ class MarketLocationDetailView(
     ]
 
     queryset = MarketLocation.objects.all()
-
-
-# ============================================================
-# SUPPLIER PROFILE
-# ============================================================
-
-class SupplierProfileCreateView(
-    generics.CreateAPIView
-):
-
-    serializer_class = SupplierProfileSerializer
-
-    permission_classes = [
-        permissions.IsAuthenticated
-    ]
-
-    def perform_create(self, serializer):
-
-        if SupplierProfile.objects.filter(
-            user=self.request.user
-        ).exists():
-
-            raise ValidationError(
-                "You already have a supplier profile."
-            )
-
-        serializer.save(
-            user=self.request.user
-        )
-
-
-class SupplierProfileView(
-    generics.RetrieveUpdateAPIView
-):
-
-    serializer_class = SupplierProfileSerializer
-
-    permission_classes = [
-        permissions.IsAuthenticated
-    ]
-
-    def get_object(self):
-
-        return get_object_or_404(
-            SupplierProfile,
-            user=self.request.user
-        )
 
 
 # ============================================================

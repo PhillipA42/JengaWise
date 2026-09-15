@@ -7,8 +7,6 @@ from .views import (
     ProjectMilestoneListCreateView,
     ProjectWorkerMatchesView,
     InviteWorkerView,
-    SupplierProfileCreateView,
-    SupplierProfileView,
     WorkerAssignmentStatusView,
     CompleteProjectView,
     ProjectMilestoneDetailView,
@@ -118,7 +116,6 @@ urlpatterns = [
         ProjectActivityListCreateView.as_view(),
         name="project-activities",
     ),
-
 
     # ========================================================
     # MARKET LOCATIONS
