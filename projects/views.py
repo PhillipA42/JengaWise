@@ -3,6 +3,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
+from .estimation_services import ConstructionEstimationService
 from .completion_services import ProjectCompletionService
 from .hiring_services import ProjectHiringService
 from .services import WorkerMatchingService
@@ -865,10 +866,41 @@ class CostEstimateListCreateView(
                 "You can only create estimates for your own projects."
             )
 
-        serializer.save(
+        # ----------------------------------------------------
+        # Create the initial estimate record
+        # ----------------------------------------------------
+
+        estimate = serializer.save(
             created_by=self.request.user
         )
 
+        # ----------------------------------------------------
+        # Generate the intelligent estimate
+        # ----------------------------------------------------
+
+        service = ConstructionEstimationService(
+            project=project,
+            pricing_market=estimate.pricing_market,
+            created_by=self.request.user,
+        )
+
+        generated_estimate = service.generate_estimate()
+
+        # ----------------------------------------------------
+        # Copy the generated values back to the original
+        # estimate created by the API.
+        # ----------------------------------------------------
+
+        estimate.material_cost = generated_estimate.material_cost
+        estimate.labour_cost = generated_estimate.labour_cost
+        estimate.other_cost = generated_estimate.other_cost
+        estimate.total_cost = generated_estimate.total_cost
+        estimate.confidence_score = generated_estimate.confidence_score
+        estimate.notes = generated_estimate.notes
+        estimate.status = generated_estimate.status
+        estimate.estimation_method = generated_estimate.estimation_method
+
+        estimate.save()
 
 class CostEstimateDetailView(
     generics.RetrieveUpdateAPIView
